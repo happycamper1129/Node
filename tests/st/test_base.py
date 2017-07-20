@@ -47,14 +47,13 @@ class TestBase(TestCase):
     def setUpClass(cls):
         wipe_etcd(HOST_IPV4)
 
-    def setUp(self, wipe_etcd=True):
+    def setUp(self):
         """
         Clean up before every test.
         """
         self.ip = HOST_IPV4
 
-        if wipe_etcd:
-            self.wipe_etcd()
+        self.wipe_etcd()
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
