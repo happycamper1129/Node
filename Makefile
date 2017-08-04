@@ -2,7 +2,7 @@
 # Versions:
 RELEASE_STREAM?=v2.4
 
-GO_BUILD_VER?=v0.7
+GO_BUILD_VER:=v0.7
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -10,20 +10,20 @@ VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
 
 # For local builds this can be made faster by running "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
 YAML_CMD?=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
-CALICO_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
+CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
 CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
-BIRD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
-GOBGPD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
-FELIX_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
-CALICOCTL_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
-LIBNETWORK_PLUGIN_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
-TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
-K8S_POLICY_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-policy-controller.version')
-CNI_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
+BIRD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
+GOBGPD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
+FELIX_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
+CALICOCTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
+LIBNETWORK_PLUGIN_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
+TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+K8S_POLICY_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-policy-controller.version')
+CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
-CONFD_VER ?= v0.12.1-calico0.2.0
+CONFD_VER := v0.12.1-calico0.2.0
 
-SYSTEMTEST_CONTAINER_VER ?= latest
+SYSTEMTEST_CONTAINER_VER := latest
 # we can use "custom" build image and test image name
 SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 
@@ -39,6 +39,7 @@ BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/birdcl
 CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/calico-bgp-daemon
+GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/gobgp
 
 ###############################################################################
 # calico/node build. Contains the following areas
@@ -158,6 +159,7 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 
 # Get the calico-bgp-daemon binary
 $(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
+	$(CURL) -L $(GOBGP_URL) -o $(@D)/gobgp
 	$(CURL) -L $(CALICO_BGP_DAEMON_URL) -o $@
 	chmod +x $(@D)/*
 
@@ -473,11 +475,11 @@ release: clean
 	@echo "git push origin $(CALICO_VER)"
 
 
-RELEASE_DIR?=release-$(CALICO_VER)
-RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
-RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
-RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
-MANIFEST_SRC ?= ../_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation
+RELEASE_DIR:=release-$(CALICO_VER)
+RELEASE_DIR_K8S_MANIFESTS:=$(RELEASE_DIR)/k8s-manifests
+RELEASE_DIR_IMAGES:=$(RELEASE_DIR)/images
+RELEASE_DIR_BIN:=$(RELEASE_DIR)/bin
+MANIFEST_SRC := ../_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation
 
 ## Create an archive that contains a complete "Calico" release
 release-archive: $(RELEASE_DIR).tgz
@@ -510,6 +512,7 @@ $(RELEASE_DIR):
 
 $(RELEASE_DIR_K8S_MANIFESTS):
 	# Ensure that the docs site is generated
+	rm -rf ../_site
 	$(MAKE) -C .. _site
 
 	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
