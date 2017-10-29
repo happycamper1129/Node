@@ -66,10 +66,12 @@ class MultiHostIpam(TestBase):
     def tearDown(self):
         # Replace original pool, if any
         response = self.hosts[0].calicoctl("get IPpool -o yaml")
-        self.hosts[0].writefile("testpools.yaml", response)
-        self.hosts[0].calicoctl("delete -f testpools.yaml")
+        self.orig_pools = yaml.safe_load(response)['items']
         if len(self.orig_pools) > 0:
+            self.hosts[0].writefile("pre_orig_pools.yaml", response)
+            self.hosts[0].calicoctl("delete -f pre_orig_pools.yaml")
             self.hosts[0].calicoctl("apply -f orig_pools.yaml")
+        #import pdb; pdb.set_trace()# Remove all workloads
         # Remove all workloads
         for host in self.hosts:
             host.remove_workloads()
@@ -95,6 +97,7 @@ class MultiHostIpam(TestBase):
                     }
         self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
         self.hosts[0].calicoctl("create -f newpool.yaml")
+        self.hosts[0].calicoctl("get IPpool -o yaml")
 
         for host in self.hosts:
             workload = host.create_workload("wlda-%s" % host.name,
