@@ -423,7 +423,7 @@ class MultiHostMainline(TestBase):
         # a workloads own hostname does not work).
         if types is None:
             types = ['icmp', 'tcp', 'udp']
-        self.assert_connectivity(retries=10,
+        self.assert_connectivity(retries=2,
                                  pass_list=n1_workloads,
                                  fail_list=n2_workloads,
                                  type_list=types)
@@ -432,3 +432,4 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(pass_list=n2_workloads,
                                  fail_list=n1_workloads,
                                  type_list=types)
+
