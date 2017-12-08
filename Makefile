@@ -106,6 +106,9 @@ PACKAGE_NAME?=github.com/projectcalico/calico/calico_node
 
 LIBCALICOGO_PATH?=none
 
+# Whether the update-felix target should pull the felix image.
+PULL_FELIX?=true
+
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.yaml
@@ -195,7 +198,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	-docker rm -f calico-felix
 	# Latest felix binaries are stored in automated builds of calico/felix.
 	# To get them, we create (but don't start) a container from that image.
-	docker pull $(FELIX_CONTAINER_NAME)
+	if $(PULL_FELIX); then docker pull $(FELIX_CONTAINER_NAME); fi
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
@@ -578,13 +581,13 @@ release: clean
 	# Build the calico/node images.
 	$(MAKE) $(NODE_CONTAINER_NAME)
 
-	# Create the release archive
-	$(MAKE) release-archive
-
 	# Retag images with corect version and quay
 	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(CALICO_VER)
 	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)
 	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):latest
+
+	# Create the release archive
+	$(MAKE) release-archive
 
 	# Check that images were created recently and that the IDs of the versioned and latest images match
 	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME)
@@ -659,7 +662,7 @@ $(RELEASE_DIR_K8S_MANIFESTS):
 
 $(RELEASE_DIR_IMAGES)/calico-node.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker save --output $@ $(NODE_CONTAINER_NAME)
+	docker save --output $@ $(NODE_CONTAINER_NAME):$(CALICO_VER)
 
 $(RELEASE_DIR_IMAGES)/calico-typha.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
