@@ -57,8 +57,13 @@ class TestIPIP(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=False) as host2:
 
-            # Create an IP pool with IP-in-IP disabled.
-            self.pool_action(host1, "create", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never")
+            # Before starting the node, create the default IP pool using the
+            # v1.0.2 calicoctl.  For calicoctl v1.1.0+, a new IPIP mode field
+            # is introduced - by testing with an older pool version validates
+            # the IPAM BIRD templates function correctly without the mode field.
+            self.pool_action(host1, "create", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never",)
+                             # TODO: Re-enable this when we support upgrading data
+                             # calicoctl_version="v1.0.2")
 
             # Autodetect the IP addresses - this should ensure the subnet is
             # correctly configured.
@@ -88,12 +93,17 @@ class TestIPIP(TestBase):
             # and no IPIP because it is easier to look for a change of state
             # than to look for state remaining the same.
 
-            # Turn on IPIP and check that the IPIP tunnel is being used.
-            self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Always")
+            # Turn on IPIP with a v1.0.2 calicoctl and check that the
+            # IPIP tunnel is being used.
+            self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Always",)
+                             # TODO: Re-enable this when we support upgrading data
+                             # calicoctl_version="v1.0.2")
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
                                      True)
 
-            # Turn off IPIP and check that IPIP tunnel is not being used.
+            # Turn off IPIP using the latest version of calicoctl and check that
+            # IPIP tunnel is not being used.  We'll use the latest version of
+            # calicoctl for the remaining tests.
             self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never")
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
                                      False)
@@ -162,7 +172,7 @@ class TestIPIP(TestBase):
 
     @staticmethod
     def pool_action(host, action, cidr,
-                    disabled=False, ipip_mode=None, nat_outgoing=None, pool_name=None):
+                    disabled=False, ipip_mode=None, calicoctl_version=None, nat_outgoing=None, pool_name=None):
         """
         Perform an ipPool action.
         """
@@ -187,7 +197,7 @@ class TestIPIP(TestBase):
         if nat_outgoing is not None:
             testdata['spec']['natOutgoing'] = nat_outgoing
         host.writejson("testfile", testdata)
-        host.calicoctl("%s -f testfile" % action)
+        host.calicoctl("%s -f testfile" % action, version=calicoctl_version)
 
     def assert_tunl_ip(self, host, ip_network, expect=True):
         """
