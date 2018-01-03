@@ -127,8 +127,6 @@ func main() {
 		configureASNumber(node)
 	}
 
-	configureNodeRef(node)
-
 	// Check expected filesystem
 	ensureFilesystemAsExpected()
 
@@ -153,20 +151,6 @@ func main() {
 
 	// Tell the user what the name of the node is.
 	log.Infof("Using node name: %s", nodeName)
-}
-
-// configureNodeRef will attempt to discover the cluster type it is running on, check to ensure we
-// have not already set it on this Node, and set it if need be.
-func configureNodeRef(node *api.Node) {
-	orchestrator := "k8s"
-	nodeRef := ""
-
-	// Sort out what type of cluster we're running on.
-	if nodeRef = os.Getenv("CALICO_K8S_NODE_REF"); nodeRef == "" {
-		return
-	}
-
-	node.Spec.OrchRefs = []api.OrchRef{api.OrchRef{NodeName: nodeRef, Orchestrator: orchestrator}}
 }
 
 // CreateOrUpdate creates the Node if ResourceVersion is not specified,
@@ -206,25 +190,27 @@ func configureLogging() {
 // determineNodeName is called to determine the node name to use for this instance
 // of calico/node.
 func determineNodeName() string {
-	// Determine the name of this node.
-	nodeName := os.Getenv("NODENAME")
-	if nodeName == "" {
-		// NODENAME not specified, check HOSTNAME (we maintain this for
-		// backwards compatibility).
-		log.Info("NODENAME environment not specified - check HOSTNAME")
-		nodeName = os.Getenv("HOSTNAME")
+	var nodeName string
+	var err error
+
+	// Determine the name of this node.  Precedence is:
+	// -  NODENAME
+	// -  HOSTNAME (lowercase)
+	// -  os.Hostname (lowercase).
+	// We use the names.Hostname which lowercases and trims the name.
+	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
+		log.Infof("Using NODENAME environment for node name")
+	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
+		log.Infof("Using HOSTNAME environment (lowercase) for node name")
+	} else if nodeName, err = names.Hostname(); err != nil {
+		log.WithError(err).Error("Unable to determine hostname")
+		terminate()
+	} else {
+		log.Warn("Using auto-detected node name. It is recommended that an explicit value is supplied using " +
+			"the NODENAME environment variable.")
 	}
-	if nodeName == "" {
-		// The node name has not been specified.  We need to use the OS
-		// hostname - but should warn the user that this is not a
-		// recommended way to start the node container.
-		var err error
-		if nodeName, err = names.Hostname(); err != nil {
-			log.WithError(err).Error("Unable to determine hostname")
-			terminate()
-		}
-		log.Warn("Auto-detecting node name. It is recommended that an explicit value is supplied using the NODENAME environment variable.")
-	}
+	log.Infof("Node name: %s", nodeName)
+
 	return nodeName
 }
 
