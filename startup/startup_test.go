@@ -38,7 +38,6 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
 var exitCode int
@@ -229,6 +228,57 @@ var _ = Describe("FV tests against a real etcd", func() {
 			},
 			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", false, true),
 	)
+
+	Describe("Test clearing of node IPs", func() {
+		Context("clearing node IPs", func() {
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+			node.Name = "clearips.test.node"
+			It("should create a Node with IPv4 and IPv6 addresses", func() {
+				_, err = c.Nodes().Create(ctx, node, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			var n *api.Node
+			It("should get the Node", func() {
+				n, err = c.Nodes().Get(ctx, node.Name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(n).NotTo(BeNil())
+				Expect(n.ResourceVersion).NotTo(Equal(""))
+			})
+
+			It("should clear the Node's IPv4 address", func() {
+				clearNodeIPs(ctx, c, n, true, false)
+				dn, err := c.Nodes().Get(ctx, node.Name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dn.Spec.BGP.IPv4Address).To(Equal(""))
+				Expect(dn.Spec.BGP.IPv6Address).ToNot(Equal(""))
+			})
+
+			It("should get the Node", func() {
+				n, err = c.Nodes().Get(ctx, node.Name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(n).NotTo(BeNil())
+				Expect(n.ResourceVersion).NotTo(Equal(""))
+			})
+
+			It("should clear the Node's IPv6 address", func() {
+				clearNodeIPs(ctx, c, n, false, true)
+				dn, err := c.Nodes().Get(ctx, node.Name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dn.Spec.BGP).To(BeNil())
+			})
+		})
+	})
 
 	Describe("Test NO_DEFAULT_POOLS env variable", func() {
 		Context("Should have no pools defined", func() {
@@ -683,9 +733,10 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 				os.Setenv(item.key, item.value)
 			}
 
-			check := configureIPsAndSubnets(node)
+			check, err := configureIPsAndSubnets(node)
 
 			Expect(check).To(Equal(expected))
+			Expect(err).NotTo(HaveOccurred())
 		},
 
 		Entry("Test with no \"IP\" env var set", &api.Node{}, []EnvItem{{"IP", ""}}, true),
@@ -781,35 +832,4 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			cs.CoreV1().Nodes().Delete(node.Name, &metav1.DeleteOptions{})
 		}
 	})
-})
-
-var _ = Describe("UT for node name determination", func() {
-	hn, _ := names.Hostname()
-	DescribeTable("Test variations on how node names are detected.",
-		func(nodenameEnv, hostnameEnv, expectedNodeName string) {
-
-			if nodenameEnv != "" {
-				os.Setenv("NODENAME", nodenameEnv)
-			} else {
-				os.Unsetenv("NODENAME")
-			}
-			if hostnameEnv != "" {
-				os.Setenv("HOSTNAME", hostnameEnv)
-			} else {
-				os.Unsetenv("HOSTNAME")
-			}
-			nodeName := determineNodeName()
-			os.Unsetenv("NODENAME")
-			os.Unsetenv("HOSTNAME")
-			Expect(nodeName).To(Equal(expectedNodeName))
-
-		},
-
-		Entry("Valid NODENAME and valid HOSTNAME", "abc-def.ghi123", "foo1.bar2-baz3", "abc-def.ghi123"),
-		Entry("Uppercase NODENAME and valid HOSTNAME (leaves uppercase)", "MyHostname-123", "valid.hostname", "MyHostname-123"),
-		Entry("Whitespace NODENAME, valid HOSTNAME", "  ", "host123", "host123"),
-		Entry("No NODENAME, uppercase HOSTNAME", "", "HOSTName", "hostname"),
-		Entry("No NODENAME, no HOSTNAME", "", "", hn),
-		Entry("Whitespace NODENAME and HOSTNAME", "  ", "  ", hn),
-	)
 })
