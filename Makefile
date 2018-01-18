@@ -106,6 +106,8 @@ LIBNETWORK_PLUGIN_REPO?=calico/libnetwork-plugin
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=$(LIBNETWORK_PLUGIN_REPO)$(ARCHTAG):$(LIBNETWORK_PLUGIN_VER)
 CTL_CONTAINER_NAME?=calico/ctl$(ARCHTAG):$(CALICOCTL_VER)
 
+RR_CONTAINER_NAME?=calico/routereflector$(ARCHTAG)
+
 STARTUP_DIR=$(NODE_CONTAINER_DIR)/startup
 STARTUP_FILES=$(shell find $(STARTUP_DIR) -name '*.go')
 ALLOCATE_IPIP_DIR=$(NODE_CONTAINER_DIR)/allocateipip
@@ -343,15 +345,17 @@ HOST_CHECKOUT_DIR?=$(shell pwd)
 
 # curl should failed on 404
 CURL=curl -sSf
-## Generate the keys and certificates for running etcd with SSL.
-ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
-certs/.certificates.created:
+
+certs/cfssl certs/cfssljson:
 	mkdir -p certs
 	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssl" -o certs/cfssl
 	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssljson" -o certs/cfssljson
 	chmod a+x certs/cfssl
 	chmod a+x certs/cfssljson
 
+## Generate the keys and certificates for running etcd with SSL.
+ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
+certs/.certificates.created: certs/cfssl certs/cfssljson
 	certs/cfssl gencert -initca tests/st/ssl-config/ca-csr.json | certs/cfssljson -bare certs/ca
 	certs/cfssl gencert \
 	  -ca certs/ca.pem \
@@ -432,7 +436,7 @@ st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-n
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
-	           -e RR_VER=$(RR_VER) \
+		   -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME):$(RR_VER) \
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
@@ -461,6 +465,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
+		   -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME):$(RR_VER) \
 	           -e ETCD_SCHEME=https \
 	           -e ETCD_CA_CERT_FILE=$(SOURCE_DIR)/certs/ca.pem \
 	           -e ETCD_CERT_FILE=$(SOURCE_DIR)/certs/client.pem \
