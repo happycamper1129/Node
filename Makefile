@@ -90,6 +90,10 @@ clean:
 	# Delete images that we built in this repo
 	docker rmi $(NODE_CONTAINER_NAME):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
+ifeq ($(ARCH),amd64)
+	docker rmi $(NODE_CONTAINER_NAME):latest || true
+	docker rmi $(NODE_CONTAINER_NAME):$(VERSION) || true
+endif
 
 ###############################################################################
 # Building the binary
@@ -140,6 +144,9 @@ $(NODE_CONTAINER_CREATED): ./Dockerfile$(ARCHTAG) $(NODE_CONTAINER_FILES) $(addp
 	  echo; echo bird --version;         /go/bin/bird --version; \
 	"
 	docker build --pull -t $(NODE_CONTAINER_NAME):latest-$(ARCH) . --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile$(ARCHTAG)
+ifeq ($(ARCH),amd64)
+	docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $(NODE_CONTAINER_NAME):latest
+endif
 	touch $@
 
 # Get bird binaries
