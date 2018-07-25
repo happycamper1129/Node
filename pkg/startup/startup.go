@@ -930,9 +930,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	// Ensure the ClusterInformation is populated.
 	// Get the ClusterType from ENV var. This is set from the manifest.
 	clusterType := os.Getenv("CLUSTER_TYPE")
-	if err := c.EnsureInitialized(ctx, VERSION, clusterType); err != nil {
-		return nil
-	}
+	c.EnsureInitialized(ctx, VERSION, clusterType)
 
 	// By default we set the global reporting interval to 0 - this is
 	// different from the defaults defined in Felix.

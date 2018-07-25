@@ -47,7 +47,7 @@ func GRInProgress(ipv string) (bool, error) {
 			return false, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 		}
 	}
-	defer c.Close() // nolint: errcheck
+	defer c.Close()
 
 	// To query the current state of the BGP peers, we connect to the BIRD
 	// socket and send a "show protocols" message.  BIRD responds with
@@ -74,9 +74,7 @@ func GRInProgress(ipv string) (bool, error) {
 	scanner := bufio.NewScanner(c)
 
 	// Set a time-out for reading from the socket connection.
-	if e := c.SetReadDeadline(time.Now().Add(birdTimeOut)); e != nil {
-		return false, e
-	}
+	c.SetReadDeadline(time.Now().Add(birdTimeOut))
 
 	for scanner.Scan() {
 		// Process the next line that has been read by the scanner.
@@ -104,9 +102,7 @@ func GRInProgress(ipv string) (bool, error) {
 
 		// Before reading the next line, adjust the time-out for
 		// reading from the socket connection.
-		if e := c.SetReadDeadline(time.Now().Add(birdTimeOut)); e != nil {
-			return false, e
-		}
+		c.SetReadDeadline(time.Now().Add(birdTimeOut))
 	}
 
 	return false, scanner.Err()
@@ -140,7 +136,7 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 			return nil, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 		}
 	}
-	defer c.Close() // nolint: errcheck
+	defer c.Close()
 
 	// To query the current state of the BGP peers, we connect to the BIRD
 	// socket and send a "show protocols" message.  BIRD responds with
@@ -188,9 +184,7 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 	peers := []bgpPeer{}
 
 	// Set a time-out for reading from the socket connection.
-	if e := conn.SetReadDeadline(time.Now().Add(birdTimeOut)); e != nil {
-		return nil, e
-	}
+	conn.SetReadDeadline(time.Now().Add(birdTimeOut))
 
 	for scanner.Scan() {
 		// Process the next line that has been read by the scanner.
@@ -227,9 +221,7 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 
 		// Before reading the next line, adjust the time-out for
 		// reading from the socket connection.
-		if e := conn.SetReadDeadline(time.Now().Add(birdTimeOut)); e != nil {
-			return nil, e
-		}
+		conn.SetReadDeadline(time.Now().Add(birdTimeOut))
 	}
 
 	return peers, scanner.Err()
