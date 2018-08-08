@@ -1,4 +1,3 @@
-# Ignore everything except the filesystem that gets copied in and the generated binaries
+# Ignore everything except the filesystem that gets copied in
 *
 !filesystem
-!dist/bin
