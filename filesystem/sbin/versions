@@ -1,4 +1,5 @@
 #!/bin/sh
+echo calico/node ${NODE_VERSION}
 calico-node -v 
 
 echo ""
