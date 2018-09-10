@@ -111,7 +111,7 @@ ifneq ($(BUILDARCH),amd64)
         ETCD_IMAGE=$(ETCD_IMAGE)-$(ARCH)
 endif
 
-K8S_VERSION?=v1.10.4
+K8S_VERSION?=v1.11.3
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
@@ -464,7 +464,7 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
-	           sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
 ###############################################################################

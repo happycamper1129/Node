@@ -12,6 +12,3 @@ certs
 vendor
 nosetests.xml
 testfile.yaml
-testfile
-calico_test.created
-release-notes*
