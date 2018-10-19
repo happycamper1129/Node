@@ -187,15 +187,12 @@ vendor: glide.lock
 		$(CALICO_BUILD) glide install -strip-vendor
 
 ## Default the repos and versions but allow them to be overridden
-LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
-FELIX_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
 FELIX_REPO?=github.com/projectcalico/felix
-FELIX_VERSION?=$(shell git ls-remote git@github.com:projectcalico/felix $(FELIX_BRANCH) 2>/dev/null | cut -f 1)
-CONFD_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
+FELIX_VERSION?=$(shell git ls-remote git@github.com:projectcalico/felix master 2>/dev/null | cut -f 1)
 CONFD_REPO?=github.com/projectcalico/confd
-CONFD_VERSION?=$(shell git ls-remote git@github.com:projectcalico/confd $(CONFD_BRANCH) 2>/dev/null | cut -f 1)
+CONFD_VERSION?=$(shell git ls-remote git@github.com:projectcalico/confd master 2>/dev/null | cut -f 1)
 
 ### Update pins in glide.yaml
 update-felix-confd-libcalico:
