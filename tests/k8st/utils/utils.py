@@ -117,7 +117,7 @@ def function_name(f):
         return "<unknown function>"
 
 
-def run(command, logerr=True):
+def run(command):
     _log.info("Run: %s", command)
     try:
         out = subprocess.check_output(command,
@@ -125,11 +125,5 @@ def run(command, logerr=True):
                                       stderr=subprocess.STDOUT)
         _log.info("Output:\n%s", out)
     except subprocess.CalledProcessError as e:
-        if logerr:
-          _log.exception("Failure output:\n%s", e.output)
+        _log.exception("Failure output:\n%s", e.output)
         raise
-    return out
-
-def curl(hostname, container="kube-node-extra"):
-    cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container, hostname)
-    return run(cmd)

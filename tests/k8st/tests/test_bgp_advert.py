@@ -19,11 +19,10 @@ from time import sleep
 from kubernetes import client, config
 
 from tests.k8st.test_base import TestBase
-from tests.k8st.utils.utils import start_external_node_with_bgp, retry_until_success, run, curl
+from tests.k8st.utils.utils import start_external_node_with_bgp, retry_until_success, run
 
 _log = logging.getLogger(__name__)
 
-attempts = 10
 
 bird_conf = """
 router id 10.192.0.5;
@@ -99,14 +98,40 @@ class TestBGPAdvert(TestBase):
     def setUp(self):
         super(TestBGPAdvert, self).setUp()
 
-        # Create bgp test namespace
-        self.ns = "bgp-test"
-        self.create_namespace(self.ns)
+        # Run tearDown in case anything was left up
+        self.tearDown()
 
         start_external_node_with_bgp("kube-node-extra", bird_conf)
 
+        # Create nginx deployment and service
+        self.create_service("nginx:1.7.9", "nginx", "bgp-test", 80)
+
         # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node", "kube-system", "CALICO_ADVERTISE_CLUSTER_IPS", "10.96.0.0/12")
+        config.load_kube_config(os.environ.get('KUBECONFIG'))
+        api = client.AppsV1Api(client.ApiClient())
+        node_ds = api.read_namespaced_daemon_set("calico-node", "kube-system", exact=True, export=True)
+        for container in node_ds.spec.template.spec.containers:
+            if container.name == "calico-node":
+                route_env_present = False
+                for env in container.env:
+                    if env.name == "CALICO_ADVERTISE_CLUSTER_IPS":
+                        route_env_present = True
+                if not route_env_present:
+                    container.env.append({"name": "CALICO_ADVERTISE_CLUSTER_IPS", "value": "10.96.0.0/12", "value_from": None})
+        api.replace_namespaced_daemon_set("calico-node", "kube-system", node_ds)
+
+        # Wait until the DaemonSet reports that all nodes have been updated.
+        while True:
+            sleep(10)
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            _log.info("%d/%d nodes updated",
+                      node_ds.status.updated_number_scheduled,
+                      node_ds.status.desired_number_scheduled)
+            if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
+                break
+
+        # Now wait until all nodes report running.
+        retry_until_success(self.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
 
         # Establish BGPPeer from cluster nodes to node-extra using calicoctl
         run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
@@ -125,95 +150,22 @@ EOF
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
-        self.delete_and_confirm(self.ns, "ns")
+        self.delete_and_confirm("bgp-test", "ns")
 
-    def get_svc_cluster_ip(self, svc, ns):
-        return run("kubectl get svc %s -n %s -o json | jq -r .spec.clusterIP" % (svc, ns)).strip()
-
-    def assert_ecmp_routes(self, dst, via=["10.192.0.3", "10.192.0.4"]):
-        matchStr = dst + " proto bird "
-        for ip in via:
-          matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
-        retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
-
-    def test_mainline(self):
+    def test_bgp_advert(self):
         """
-        Runs the mainline tests for service ip advertisement
-        - Create both a Local and a Cluster type NodePort service with a single replica.
-          - assert only local and cluster CIDR routes are advertised.
-          - assert /32 routes are used, source IP is preserved.
-        - Create a local LoadBalancer service with clusterIP = None, assert no change.
-        - Scale the Local NP service so it is running on multiple nodes, assert ECMP routing, source IP is preserved.
-        - Delete both services, assert only cluster CIDR route is advertised.
+        Test that BGP routes to services are exported over BGP
         """
-        # Assert that a route to the service IP range is present.
-        retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
 
-        # Create both a Local and a Cluster type NodePort service with a single replica.
-        local_svc = "nginx-local"
-        cluster_svc = "nginx-cluster"
-        self.create_service("nginx:1.7.9", local_svc, self.ns, 80)
-        self.create_service("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
-        self.wait_until_exists(local_svc, "svc", self.ns)
-        self.wait_until_exists(cluster_svc, "svc", self.ns)
+        # # Test access to nginx svc from kube-node-extra
 
-        # Get clusterIPs.
-        local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
-        cluster_svc_ip = self.get_svc_cluster_ip(cluster_svc, self.ns)
+        def test():
+            run("docker exec kube-node-extra ip r")
+            # Assert that a route to the service IP range is present
+            run("docker exec kube-node-extra ip r | grep 10.96.0.0/12")
+            # Assert that the nginx service can be curled from the external node
+            run("docker exec kube-node-extra "
+                "curl --connect-timeout 2 -m 3  "
+                "$(kubectl get svc nginx -n bgp-test -o json | jq -r .spec.clusterIP)")
 
-        # Assert that both nginx service can be curled from the external node.
-        retry_until_success(curl,function_args=[local_svc_ip])
-        retry_until_success(curl,function_args=[cluster_svc_ip])
-
-        # Assert that local clusterIP is an advertised route and cluster clusterIP is not.
-        retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
-        retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
-
-        # Create a network policy that only accepts traffic from the external node.
-        run("""docker exec -i kube-master kubectl apply -f - << EOF
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-tcp-80-ex
-  namespace: bgp-test
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - ipBlock: { cidr: 10.192.0.5/32 }
-    ports:
-    - protocol: TCP
-      port: 80
-EOF
-""")
-
-        # Connectivity to nginx-local should always succeed.
-        for i in range(attempts):
-          retry_until_success(curl, function_args=[local_svc_ip])
-
-        # Connectivity to nginx-cluster will rarely succeed because it is load-balanced across all nodes.
-        # When the traffic hits a node that doesn't host one of the service's pod, it will be re-routed 
-        #  to another node and SNAT will cause the policy to drop the traffic.
-        # Try to curl 10 times.
-        try:
-          for i in range(attempts):
-            curl("kube-node-extra", cluster_svc_ip)
-          self.fail("external node should not be able to consistently access the cluster svc")
-        except subprocess.CalledProcessError:
-          pass
-
-        # Scale the local_svc to 4 replicas
-        self.scale_deployment(local_svc, self.ns, 4)
-        self.assert_ecmp_routes(local_svc_ip)
-        for i in range(attempts):
-          retry_until_success(curl, function_args=[local_svc_ip])
-
-        # Delete both services, assert only cluster CIDR route is advertised.
-        self.delete_and_confirm(local_svc, "svc", self.ns)
-        self.delete_and_confirm(cluster_svc, "svc", self.ns)
-
-        # Assert that clusterIP is no longer and advertised route
-        retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
-
+        retry_until_success(test, retries=6, wait_time=10)
