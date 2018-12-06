@@ -13,7 +13,8 @@
 # limitations under the License.
 
 import os
-from docker_host import DockerHost
+from docker_host import DockerHost, CHECKOUT_DIR
+from utils import get_ip, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL
 
 from netaddr import IPAddress
 
