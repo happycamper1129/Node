@@ -7,6 +7,7 @@ import (
 
 	"github.com/projectcalico/node/pkg/calicoclient"
 
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -35,7 +36,13 @@ func Run() {
 	log.AddHook(&logutils.ContextHook{})
 
 	// Load the client config from environment.
-	_, c := calicoclient.CreateClient()
+	cfg, c := calicoclient.CreateClient()
+
+	// This is a no-op for KDD.
+	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
+		log.Info("Kubernetes datastore driver handles IPIP allocation - no op")
+		return
+	}
 
 	// The allocate_ipip_addr binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
