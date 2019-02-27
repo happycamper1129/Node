@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright (c) 2018 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +16,9 @@ import logging
 import os
 import subprocess
 import unittest
+import json
 from time import sleep
+from netaddr import IPAddress
 
 from kubernetes import client, config
 
@@ -96,7 +99,6 @@ protocol bgp Mesh_10_192_0_4 from bgp_template {
 }
 """
 
-
 class TestBGPAdvert(TestBase):
 
     def setUp(self):
@@ -142,6 +144,115 @@ EOF
         for ip in via:
           matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
         retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
+
+    def update_json(self, filename):
+        #config = json.load(open(filename).read())
+        with open(filename,'r') as f:
+            #f.write(json.dumps(config))
+            config = json.load(f)
+        config["metadata"]["labels"].update({"i-am-a-route-reflector": "true"})
+        config["spec"]["bgp"].update({"routeReflectorClusterID": "224.0.0.1"})
+        with open('/home/output.json', 'w') as fp:
+            json.dump(config, fp, indent=2)
+
+    def test_rr(self):
+        run("""kubectl apply -f - << EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-rr
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+      run: nginx-rr
+  template:
+    metadata:
+      labels:
+        app: nginx
+        run: nginx-rr
+    spec:
+      containers:
+      - name: nginx-rr
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        nodeName: kube-node-1
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+    run: nginx-rr
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+    run: nginx-rr
+  type: NodePort
+  externalTrafficPolicy: Local
+EOF
+""")
+
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get nodes -o yaml")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgppeers -o yaml")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgpconfigs -o yaml")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json > /home/rosh.json")
+        run("sed -i '11 a \ \ \ \ \ \ \"i-am-a-route-reflector\": \"true\",' /home/rosh.json")
+        run("sed -i '21 a \ \ \ \ \ \ \"routeReflectorClusterID\": \"224.0.0.1\",' /home/rosh.json")
+        run("kubectl cp /home/rosh.json kube-system/calicoctl:/home/rosh.json")
+        run("kubectl exec -i -n kube-system calicoctl -- cat /home/rosh.json")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f /home/rosh.json")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json > /home/rosh-edited.json")
+        run("cat /home/rosh-edited.json")
+
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+items:
+- apiVersion: projectcalico.org/v3
+  kind: BGPConfiguration
+  metadata: {name: default}
+  spec:
+    nodeToNodeMeshEnabled: false
+    asNumber: 64512
+kind: BGPConfigurationList
+metadata:
+  resourceVersion: 139
+EOF
+""")
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+items:
+- apiVersion: projectcalico.org/v3
+  kind: BGPPeer
+  metadata: {name: kube-node-1}
+  spec:
+    node: kube-node-1
+    peerIP: 10.192.0.4
+    asNumber: 64512
+- apiVersion: projectcalico.org/v3
+  kind: BGPPeer
+  metadata: {name: node-extra.peer}
+  spec:
+    node: node-extra.peer
+    peerIP: 10.192.0.4
+    asNumber: 64512
+kind: BGPPeerList
+EOF
+""")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgppeers -o wide")
+        assert False
 
     def test_mainline(self):
         """
