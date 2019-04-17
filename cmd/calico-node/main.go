@@ -84,6 +84,7 @@ func main() {
 
 	// If any of the readienss options are provided, check readiness.
 	if *birdReady || *bird6Ready || *felixReady {
+		logrus.Info("Threshold time for bird readiness check: ", *thresholdTime)
 		readiness.Run(*birdReady, *bird6Ready, *felixReady, *thresholdTime)
 		os.Exit(0)
 	}

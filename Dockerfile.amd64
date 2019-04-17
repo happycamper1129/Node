@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ARG BIRD_IMAGE=calico/bird:latest
-
-FROM calico/bpftool:v5.0-amd64 as bpftool
 FROM ${BIRD_IMAGE} as bird
 
 FROM debian:buster-slim
@@ -65,7 +63,5 @@ COPY vendor/github.com/kelseyhightower/confd/etc/calico/ /etc/calico/
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node
-
-COPY --from=bpftool /bpftool /bin
 
 CMD ["start_runit"]
