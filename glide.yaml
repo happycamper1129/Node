@@ -9,16 +9,16 @@ import:
   version: 773f5027234d0b08adf766be34f55df2f312abf7
 - package: github.com/kelseyhightower/confd
   repo: https://github.com/projectcalico/confd.git
-  version: bd82868e007234d0041c51593119836547c8d8a0
+  version: 557fa05ba9b482c8106d5173bb0171794354e335
   subpackages:
   - pkg/config
   - pkg/run
 - package: github.com/projectcalico/felix
-  version: fbe8a12edd2c304ba9ff1d3312363381d42b830a
+  version: fac65b42f09b4de24805a14a95bc34f6d6995780
   subpackages:
   - daemon
 - package: github.com/projectcalico/libcalico-go
-  version: 727a39e77d674af6e7d6684b941916183d80f5de
+  version: 43c1da882b70aba9d0325e7de4393439ef202550
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
@@ -32,8 +32,12 @@ import:
   - lib/options
   - lib/upgrade/migrator
   - lib/upgrade/migrator/clients
+# Use our fork, because v1.0.5 causes test breakages due to problems with our log formatting code,
+# but other deps require newer version because of the SetOutput function. Our fork backports
+# the missing stuff on top of v1.0.4.
 - package: github.com/sirupsen/logrus
-  version: v1.0.4
+  repo: https://github.com/projectcalico/logrus
+  version: v1.0.4-calico
 - package: k8s.io/apimachinery
   subpackages:
   - pkg/apis/meta/v1
