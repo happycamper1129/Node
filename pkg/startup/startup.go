@@ -774,8 +774,6 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 	switch strings.ToLower(vxlanModeName) {
 	case "", "off", "never":
 		vxlanMode = api.VXLANModeNever
-	case "crosssubnet", "cross-subnet":
-		vxlanMode = api.VXLANModeCrossSubnet
 	case "always":
 		vxlanMode = api.VXLANModeAlways
 	default:
