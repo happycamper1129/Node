@@ -18,5 +18,3 @@ calico_test.created
 release-notes*
 report/*.xml
 .empty
-crds.yaml
-filesystem/etc/calico/confd/*
