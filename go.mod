@@ -4,11 +4,11 @@ go 1.12
 
 require (
 	github.com/coreos/etcd v3.3.13+incompatible // indirect
-	github.com/kelseyhightower/confd v0.16.0
+	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20190906065453-dbe74a993872
+	github.com/projectcalico/felix v0.0.0-20190907064648-bc998b2587eb
 	github.com/projectcalico/libcalico-go v0.0.0-20190905235925-4321d26bc57d
 	github.com/projectcalico/typha v0.0.0-20190906041856-92ace1ba0584
 	github.com/sirupsen/logrus v1.4.2
@@ -21,4 +21,4 @@ require (
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f
 
-replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20190905235838-49e2cc0ac318
+replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20190907042226-37c5efe836a5
