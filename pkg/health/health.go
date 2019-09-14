@@ -142,13 +142,17 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 
 // checkFelixHealth checks if felix is ready or live by making an http request to
 // Felix's readiness or liveness endpoint.
-func checkFelixHealth(endpoint, probeType string) error {
+func checkFelixHealth(endpoint, probeType string) (err error) {
 	c := &http.Client{Timeout: 5 * time.Second}
 	resp, err := c.Get(endpoint)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if e := resp.Body.Close(); e != nil {
+			err = e
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("%s probe reporting %d", probeType, resp.StatusCode)
