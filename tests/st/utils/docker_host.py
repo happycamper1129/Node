@@ -188,14 +188,10 @@ class DockerHost(object):
 
         self.execute(cmd)
 
-    def assert_is_live(self, felix=True, bird=True, bird6=True):
+    def assert_is_live(self, felix=True):
         cmd = "docker exec calico-node /bin/calico-node"
         if felix:
             cmd += " -felix-live"
-        if bird:
-            cmd += " -bird-live"
-        if bird6:
-            cmd += " -bird6-live"
 
         self.execute(cmd)
 
