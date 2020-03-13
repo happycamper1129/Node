@@ -147,7 +147,7 @@ class MultiHostIpam(TestBase):
         Create some workloads, then ask calicoctl to tell you about the IPs in the pool.
         Check that the correct IPs are shown as in use.
         """
-        num_workloads = 2
+        num_workloads = 10
         workload_ips = []
 
         ipv4_subnet = netaddr.IPNetwork("192.168.45.0/25")
@@ -188,14 +188,11 @@ class MultiHostIpam(TestBase):
         Repeatedly create and delete workloads until the system re-assigns an IP.
         """
 
-        ipv4_subnet = netaddr.IPNetwork("192.168.46.0/29")
-
-        # Create a new IP pool, but use a smaller blocksize so that it doesn't
-        # take as many iterations to complete the test.
+        ipv4_subnet = netaddr.IPNetwork("192.168.46.0/25")
         new_pool = {'apiVersion': 'projectcalico.org/v3',
                     'kind': 'IPPool',
                     'metadata': {'name': 'ippool-name-4'},
-                    'spec': {'cidr': str(ipv4_subnet.ipv4()), 'blockSize': 30},
+                    'spec': {'cidr': str(ipv4_subnet.ipv4())},
                     }
         self.hosts[0].writejson("newpool.json", new_pool)
         self.hosts[0].calicoctl("create -f newpool.json")
@@ -225,8 +222,8 @@ class MultiHostIpam(TestBase):
                                                               "still in use!"
 
             if new_workload.ip == original_ip:
-                # Used a /30 block size - so 4 addresses.
-                poolsize = 4
+                # We assign pools to hosts in /26's - so 64 addresses.
+                poolsize = 64
                 # But if we're using one for a static workload, there will be one less
                 if make_static_workload:
                     poolsize -= 1
