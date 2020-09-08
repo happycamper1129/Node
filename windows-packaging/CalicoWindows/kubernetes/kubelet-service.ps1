@@ -16,9 +16,7 @@ Param(
     [string]$NodeIp="",
     [string]$InterfaceName="Ethernet"
 )
-
-$baseDir = "$PSScriptRoot\.."
-. $baseDir\config.ps1
+. c:\CalicoWindows\config.ps1
 
 Write-Host "Running kubelet service."
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
