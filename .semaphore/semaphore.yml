@@ -52,12 +52,12 @@ blocks:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
 
-# build windows archive
-- name: "build windows archive"
+# build windows release
+- name: "nightly build windows release"
   dependencies: []
   task:
     jobs:
-    - name: "build windows archive"
+    - name: "build windows release"
       commands:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - make release-windows-archive VERSION=${BRANCH_NAME}
