@@ -47,6 +47,3 @@ COPY --from=bpftool /bpftool /bin
 RUN rm /usr/bin/qemu-aarch64-static
 
 CMD ["start_runit"]
-
-# Tell sv where to find the services.
-ENV SVDIR=/etc/service/enabled
