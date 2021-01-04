@@ -100,6 +100,7 @@ func Run() {
 
 	// Determine the name for this node.
 	nodeName := determineNodeName()
+	log.Infof("Starting node %s with version %s", nodeName, VERSION)
 
 	// Create the Calico API cli.
 	cfg, cli := calicoclient.CreateClient()
@@ -395,11 +396,11 @@ func determineNodeName() string {
 	// -  os.Hostname (lowercase).
 	// We use the names.Hostname which lowercases and trims the name.
 	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
-		log.Infof("Using NODENAME environment for node name %s", nodeName)
+		log.Infof("Using NODENAME environment for node name")
 	} else if nodeName = nodenameFromFile(); nodeName != "" {
-		log.Infof("Using stored node name %s from %s", nodeName, nodenameFileName())
+		log.Info("Using stored node name from " + nodenameFileName())
 	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
-		log.Infof("Using HOSTNAME environment (lowercase) for node name %s", nodeName)
+		log.Infof("Using HOSTNAME environment (lowercase) for node name")
 	} else if nodeName, err = names.Hostname(); err != nil {
 		log.WithError(err).Error("Unable to determine hostname")
 		terminate()
