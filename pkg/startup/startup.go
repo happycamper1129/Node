@@ -939,7 +939,6 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		ip, _, err := cnet.ParseCIDR(p.Spec.CIDR)
 		if err != nil {
 			log.Warnf("Error parsing CIDR '%s'. Skipping the IPPool.", p.Spec.CIDR)
-			continue
 		}
 		version := ip.Version()
 		ipv4Present = ipv4Present || (version == 4)
