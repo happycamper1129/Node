@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.56
+GO_BUILD_VER?=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_NODE_PROJECT_ID)
@@ -14,7 +14,7 @@ NODE_IMAGE     ?=node
 DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
 else
 NODE_IMAGE     ?=calico/node
-DEV_REGISTRIES ?=quay.io docker.io
+DEV_REGISTRIES ?=quay.io registry.hub.docker.com
 endif
 
 BUILD_IMAGES ?=$(NODE_IMAGE)
@@ -54,18 +54,10 @@ Makefile.common.$(MAKE_BRANCH):
 
 include Makefile.common
 
-# Required for eBPF support in ARM64
-ifeq ($(ARCH),arm64)
-# Forces ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-# Prevents docker from tagging the output image incorrectly as amd64.
-TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
-
 ###############################################################################
 
 # Versions and location of dependencies used in the build.
-BIRD_VERSION=v0.3.3-184-g202a2186
+BIRD_VERSION=v0.3.3-167-g0a2f8d2d
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
@@ -83,8 +75,7 @@ ifneq ($(BUILDARCH),amd64)
 	ETCD_IMAGE=$(ETCD_IMAGE)-$(ARCH)
 endif
 
-# TODO: Update this to use newer version of Kubernetes.
-HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.17.0
+HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
@@ -151,14 +142,12 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 DATE:=$(shell date -u +'%FT%T%z')
 
 LDFLAGS=-ldflags "\
-	-X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
+	-X $(PACKAGE_NAME)/pkg/startup.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
 	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT)"
 
 SRC_FILES=$(shell find ./pkg -name '*.go')
-
-BINDIR?=bin
 
 ## Clean enough that a new release build will be clean
 clean:
@@ -183,7 +172,7 @@ clean:
 ###############################################################################
 # Updating pins
 ###############################################################################
-update-pins: update-api-pin update-libcalico-pin update-felix-pin update-confd-pin update-cni-plugin-pin
+update-pins: update-libcalico-pin update-felix-pin update-confd-pin update-cni-plugin-pin
 
 ###############################################################################
 # Building the binary
@@ -216,8 +205,7 @@ remote-deps: mod-download
 		chmod -R +w filesystem/etc/calico/confd/ config/ filesystem/usr/lib/calico/bpf/'
 
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
-# Currently CGO can be enbaled in ARM64 and AMD64 builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH), amd64)
 CGO_ENABLED=1
 else
 CGO_ENABLED=0
@@ -258,17 +246,6 @@ image: remote-deps $(NODE_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-ifeq ($(TEST_IMAGE_BUILD),true)
-	# If testing image builds, clean sub-image afterwards to free disk space (for Semaphore CI)
-	$(MAKE) clean-sub-image-$*
-endif
-
-## Remove images for all supported ARCHes
-clean-image-all: $(addprefix clean-sub-image-,$(VALIDARCHES))
-## Remove sub-image from docker and delete $(NODE_CONTAINER_CREATED) file
-clean-sub-image-%:
-	rm -f .calico_node.created-$*
-	docker rmi $(NODE_IMAGE):latest-$* || true
 
 $(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
@@ -283,8 +260,7 @@ endif
 	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calico-node-$(ARCH) -v;	 /go/bin/calico-node-$(ARCH) -v; \
 	"
-## TARGET_PLATFORM fixes an issue where `FROM SCRATCH` in the Dockerfile share the same architecture as the host.
-	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	touch $@
 
 # download BIRD source to include in image.
@@ -310,44 +286,7 @@ fv: run-k8s-apiserver
 	-e GO111MODULE=on \
 	--net=host \
 	-w /go/src/$(PACKAGE_NAME) \
-	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
-
-## Create a local kind dual stack cluster.
-KUBECONFIG?=kubeconfig.yaml
-cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
-	# First make sure any previous cluster is deleted
-	make cluster-destroy
-	
-	# Create a kind cluster.
-	$(BINDIR)/kind create cluster \
-	        --config ./tests/kind-config.yaml \
-	        --kubeconfig $(KUBECONFIG) \
-	        --image kindest/node:$(K8S_VERSION)
-	
-	# Deploy resources needed in test env.
-	$(MAKE) deploy-test-resources
-	
-	# Wait for controller manager to be running and healthy.
-	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-
-## Deploy resources on the kind cluster that are needed for tests
-deploy-test-resources: $(BINDIR)/kubectl calico-node.tar
-	KUBECONFIG=$(KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
-
-## Destroy local kind cluster
-cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
-	-$(BINDIR)/kubectl --kubeconfig=$(KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
-	-$(BINDIR)/kind delete cluster
-	rm -f ./tests/k8st/infra/calico.yaml.tmp
-	rm -f $(KUBECONFIG)
-
-$(BINDIR)/kind:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
-
-$(BINDIR)/kubectl:
-	mkdir -p $(BINDIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/$(ARCH)/kubectl -o $@
-	chmod +x $(BINDIR)/kubectl
+	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/startup pkg/allocateip $(GINKGO_ARGS)
 
 # etcd is used by the STs
 .PHONY: run-etcd
@@ -475,15 +414,18 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: calico-node.tar cluster-create
+kind-k8st-setup: calico-node.tar
+	curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.0/bin/linux/amd64/kubectl
+	chmod +x ./kubectl
+	tests/k8st/create_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: calico_test.created $(KUBECONFIG)
+kind-k8st-run-test: calico_test.created
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
-	    -v $(CURDIR)/$(KUBECONFIG):/root/.kube/config \
-	    -v $(CURDIR)/$(BINDIR)/kubectl:/bin/kubectl \
+	    -v ${HOME}/.kube/kind-config-kind:/root/.kube/config \
+	    -v $(CURDIR)/kubectl:/bin/kubectl \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
@@ -492,7 +434,9 @@ kind-k8st-run-test: calico_test.created $(KUBECONFIG)
 	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
 
 .PHONY: kind-k8st-cleanup
-kind-k8st-cleanup: cluster-destroy
+kind-k8st-cleanup:
+	tests/k8st/delete_kind_cluster.sh
+	rm -f ./kubectl
 
 # Needed for Semaphore CI (where disk space is a real issue during k8s-test)
 .PHONY: remove-go-build-image
@@ -502,7 +446,7 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
+st: remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
 	# Check versions of Calico binaries that ST execution will use.
 	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calicoctl version;	  /go/bin/calicoctl version; \
@@ -572,10 +516,10 @@ release-build: release-prereqs clean
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-	$(MAKE) image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) image-all
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=latest
 	$(MAKE) release-windows-archive
 
 ## Produces the Windows ZIP archive for the release.
@@ -603,7 +547,7 @@ endif
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
+	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=$(VERSION)
 
 	# Push Windows artifacts to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -625,7 +569,7 @@ endif
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
+	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=latest
 
 .PHONY: node-test-at
 # Run docker-image acceptance tests

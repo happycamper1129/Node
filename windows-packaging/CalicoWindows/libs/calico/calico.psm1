@@ -304,15 +304,12 @@ function Wait-ForManagementIP($NetworkName)
 
 function Get-LastBootTime()
 {
-    $bootTime = (Get-CimInstance win32_operatingsystem | select @{LABEL='LastBootUpTime';EXPRESSION={$_.lastbootuptime}}).LastBootUpTime
+    $bootTime = (Get-WmiObject win32_operatingsystem | select @{LABEL='LastBootUpTime';EXPRESSION={$_.lastbootuptime}}).LastBootUpTime
     if (($bootTime -EQ $null) -OR ($bootTime.length -EQ 0))
     {
         throw "Failed to get last boot time"
     }
- 
-    # This function is used in conjunction with Get-StoredLastBootTime, which
-    # returns a string, so convert the datetime value to a string using the "general" standard format.
-    return $bootTime.ToString("G")
+    return $bootTime
 }
 
 $softwareRegistryKey = "HKLM:\Software\Tigera"

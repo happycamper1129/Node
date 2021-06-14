@@ -7,24 +7,22 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/api v0.0.0-20210908204226-36fbcf68f1c8
-	github.com/projectcalico/cni-plugin v1.11.1-0.20211001000109-a196956856ff
-	github.com/projectcalico/felix v0.0.0-20210928204912-3e00bbcd5104
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210924171343-658c80ee8a34
-	github.com/projectcalico/typha v0.7.3-0.20210924173430-87026f538030
+	github.com/projectcalico/cni-plugin v1.11.1-0.20210525213118-daae16cfaea1
+	github.com/projectcalico/felix v0.0.0-20210526183001-269912c5ad0e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210524102741-3503e05cfaa8
+	github.com/projectcalico/typha v0.7.3-0.20210524104642-ae095e9e80f3
 	github.com/sirupsen/logrus v1.7.0
-	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
+	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
 	k8s.io/api v0.21.0-rc.0
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
-	sigs.k8s.io/kind v0.11.1 // indirect
 )
 
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210924174325-837ffa270322
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210525165507-d2e349a422ee
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 

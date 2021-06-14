@@ -112,19 +112,6 @@ class TestBase(TestCase):
         Creates a deployment and corresponding service with the given
         parameters.
         """
-        # Use a pod anti-affinity so that the scheduler prefers deploying the
-        # pods on different nodes. This makes our tests more reliable, since
-        # some tests expect pods to be scheduled to different nodes.
-        selector = {'matchLabels': {'app': name}}
-        terms = [client.V1WeightedPodAffinityTerm(
-            pod_affinity_term=client.V1PodAffinityTerm(
-                label_selector=selector,
-                topology_key="kubernetes.io/hostname"),
-            weight=100,
-            )]
-        anti_aff = client.V1PodAntiAffinity(
-                preferred_during_scheduling_ignored_during_execution=terms)
-
         # Run a deployment with <replicas> copies of <image>, with the
         # pods labelled with "app": <name>.
         deployment = client.V1Deployment(
@@ -133,18 +120,14 @@ class TestBase(TestCase):
             metadata=client.V1ObjectMeta(name=name),
             spec=client.V1DeploymentSpec(
                 replicas=replicas,
-                selector=selector,
+                selector={'matchLabels': {'app': name}},
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(labels={"app": name}),
-                    spec=client.V1PodSpec(
-                        affinity=client.V1Affinity(pod_anti_affinity=anti_aff),
-                        containers=[
-                          client.V1Container(name=name,
-                                             image=image,
-                                             ports=[client.V1ContainerPort(container_port=port)]),
+                    spec=client.V1PodSpec(containers=[
+                        client.V1Container(name=name,
+                                           image=image,
+                                           ports=[client.V1ContainerPort(container_port=port)]),
                     ]))))
-
-        # Create the deployment.
         api_response = client.AppsV1Api().create_namespaced_deployment(
             body=deployment,
             namespace=ns)
@@ -178,7 +161,7 @@ class TestBase(TestCase):
         if cluster_ip:
           service.spec["clusterIP"] = cluster_ip
         if ipv6:
-          service.spec["ipFamilies"] = ["IPv6"]
+          service.spec["ipFamily"] = "IPv6"
 
         api_response = self.cluster.create_namespaced_service(
             body=service,
@@ -189,7 +172,7 @@ class TestBase(TestCase):
     def check_calico_version(self):
         config.load_kube_config(os.environ.get('KUBECONFIG'))
         api = client.AppsV1Api(client.ApiClient())
-        node_ds = api.read_namespaced_daemon_set("calico-node", "kube-system", exact=True, export=False)
+        node_ds = api.read_namespaced_daemon_set("calico-node", "kube-system", exact=True, export=True)
         for container in node_ds.spec.template.spec.containers:
             if container.name == "calico-node":
                 if container.image != "calico/node:latest-amd64":
@@ -228,7 +211,7 @@ class TestBase(TestCase):
     def update_ds_env(self, ds, ns, env_vars):
         config.load_kube_config(os.environ.get('KUBECONFIG'))
         api = client.AppsV1Api(client.ApiClient())
-        node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=False)
+        node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=True)
         for container in node_ds.spec.template.spec.containers:
             if container.name == ds:
                 for k, v in env_vars.items():
