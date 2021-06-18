@@ -1,17 +1,3 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package allocateip
 
 import (
@@ -24,9 +10,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
@@ -174,7 +159,7 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 				// For pools just track the whole data.
 				log.Debugf("Updated pool resource: %s", u.Key)
 				data = v
-			case *libapi.Node:
+			case *api.Node:
 				// For nodes, we only care about our own node, *and* we only care about the wireguard public key.
 				if v.Name != r.nodename {
 					continue
@@ -468,12 +453,12 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 			node.Spec.IPv4VXLANTunnelAddr = addr
 		case ipam.AttributeTypeIPIP:
 			if node.Spec.BGP == nil {
-				node.Spec.BGP = &libapi.NodeBGPSpec{}
+				node.Spec.BGP = &api.NodeBGPSpec{}
 			}
 			node.Spec.BGP.IPv4IPIPTunnelAddr = addr
 		case ipam.AttributeTypeWireguard:
 			if node.Spec.Wireguard == nil {
-				node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
+				node.Spec.Wireguard = &api.NodeWireguardSpec{}
 			}
 			node.Spec.Wireguard.InterfaceIPv4Address = addr
 		}
@@ -519,7 +504,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 				// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
 				// libcalico asserts that if a BGP spec is present, that it not be empty.
-				if reflect.DeepEqual(*node.Spec.BGP, libapi.NodeBGPSpec{}) {
+				if reflect.DeepEqual(*node.Spec.BGP, api.NodeBGPSpec{}) {
 					logCtx.Debug("BGP spec is now empty, setting to nil")
 					node.Spec.BGP = nil
 				}
@@ -529,7 +514,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 				ipAddrStr = node.Spec.Wireguard.InterfaceIPv4Address
 				node.Spec.Wireguard.InterfaceIPv4Address = ""
 
-				if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
+				if reflect.DeepEqual(*node.Spec.Wireguard, api.NodeWireguardSpec{}) {
 					logCtx.Debug("Wireguard spec is now empty, setting to nil")
 					node.Spec.Wireguard = nil
 				}
@@ -594,7 +579,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 // determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise
 // it will only return IPIP enabled pools.
-func determineEnabledPoolCIDRs(node libapi.Node, ipPoolList api.IPPoolList, attrType string) []net.IPNet {
+func determineEnabledPoolCIDRs(node api.Node, ipPoolList api.IPPoolList, attrType string) []net.IPNet {
 	// For wireguard, return no valid pools if the wireguard public key has not been set. Only once wireguard has been
 	// enabled *and* the wireguard device has been initialized do we require an IP address to be configured.
 	if attrType == ipam.AttributeTypeWireguard && node.Status.WireguardPublicKey == "" {
@@ -610,7 +595,7 @@ func determineEnabledPoolCIDRs(node libapi.Node, ipPoolList api.IPPoolList, attr
 		}
 
 		// Check if IP pool selects the node
-		if selects, err := ipam.SelectsNode(ipPool, node); err != nil {
+		if selects, err := ipPool.SelectsNode(node); err != nil {
 			log.WithError(err).Errorf("Failed to compare nodeSelector '%s' for IPPool '%s', skipping", ipPool.Spec.NodeSelector, ipPool.Name)
 			continue
 		} else if !selects {

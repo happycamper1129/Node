@@ -34,9 +34,8 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
@@ -52,8 +51,8 @@ func fakeExitFunction(ec int) {
 	exitCode = ec
 }
 
-// makeNode creates an libapi.Node with some BGPSpec info populated.
-func makeNode(ipv4 string, ipv6 string) *libapi.Node {
+// makeNode creates an api.Node with some BGPSpec info populated.
+func makeNode(ipv4 string, ipv6 string) *api.Node {
 	ip4, ip4net, _ := net.ParseCIDR(ipv4)
 	ip4net.IP = ip4.IP
 
@@ -67,9 +66,9 @@ func makeNode(ipv4 string, ipv6 string) *libapi.Node {
 		ip6Addr = ip6net.String()
 	}
 
-	n := &libapi.Node{
-		Spec: libapi.NodeSpec{
-			BGP: &libapi.NodeBGPSpec{
+	n := &api.Node{
+		Spec: api.NodeSpec{
+			BGP: &api.NodeBGPSpec{
 				IPv4Address: ip4net.String(),
 				IPv6Address: ip6Addr,
 			},
@@ -96,9 +95,9 @@ var _ = DescribeTable("Node IP detection failure cases",
 		c, err := client.New(*cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		node := libapi.Node{}
+		node := api.Node{}
 		if rrCId != "" {
-			node.Spec.BGP = &libapi.NodeBGPSpec{RouteReflectorClusterID: rrCId}
+			node.Spec.BGP = &api.NodeBGPSpec{RouteReflectorClusterID: rrCId}
 		}
 		_ = configureAndCheckIPAddressSubnets(context.Background(), c, &node)
 		Expect(my_ec).To(Equal(expectedExitCode))
@@ -339,7 +338,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			var n *libapi.Node
+			var n *api.Node
 			It("should get the Node", func() {
 				n, err = c.Nodes().Get(ctx, node.Name, options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -828,8 +827,8 @@ var _ = Describe("FV tests against a real etcd", func() {
 		})
 
 		Describe("Test OrchRef configuration", func() {
-			DescribeTable("Should configure the OrchRef with the proper env var set", func(envs []EnvItem, expected libapi.OrchRef, isEqual bool) {
-				node := &libapi.Node{}
+			DescribeTable("Should configure the OrchRef with the proper env var set", func(envs []EnvItem, expected api.OrchRef, isEqual bool) {
+				node := &api.Node{}
 
 				for _, env := range envs {
 					os.Setenv(env.key, env.value)
@@ -845,13 +844,13 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 			},
 
-				Entry("valid single k8s env var", []EnvItem{{"CALICO_K8S_NODE_REF", "node1"}}, libapi.OrchRef{"node1", "k8s"}, true), // nolint: vet
+				Entry("valid single k8s env var", []EnvItem{{"CALICO_K8S_NODE_REF", "node1"}}, api.OrchRef{"node1", "k8s"}, true), // nolint: vet
 			)
 
 			It("Should not configure any OrchRefs when no valid env vars are passed", func() {
 				os.Setenv("CALICO_UNKNOWN_NODE_REF", "node1")
 
-				node := &libapi.Node{}
+				node := &api.Node{}
 				configureNodeRef(node)
 
 				Expect(node.Spec.OrchRefs).To(HaveLen(0))
@@ -859,8 +858,8 @@ var _ = Describe("FV tests against a real etcd", func() {
 			It("Should not set an OrchRef if it is already set", func() {
 				os.Setenv("CALICO_K8S_NODE_REF", "node1")
 
-				node := &libapi.Node{}
-				node.Spec.OrchRefs = append(node.Spec.OrchRefs, libapi.OrchRef{"node1", "k8s"}) // nolint: vet
+				node := &api.Node{}
+				node.Spec.OrchRefs = append(node.Spec.OrchRefs, api.OrchRef{"node1", "k8s"}) // nolint: vet
 				configureNodeRef(node)
 
 				Expect(node.Spec.OrchRefs).To(HaveLen(1))
@@ -873,7 +872,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 
 	DescribeTable("Test variations on how IPs are detected.",
-		func(node *libapi.Node, items []EnvItem, expected bool) {
+		func(node *api.Node, items []EnvItem, expected bool) {
 
 			for _, item := range items {
 				os.Setenv(item.key, item.value)
@@ -885,12 +884,12 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 			Expect(err).NotTo(HaveOccurred())
 		},
 
-		Entry("Test with no \"IP\" env var set", &libapi.Node{}, []EnvItem{{"IP", ""}}, true),
-		Entry("Test with \"IP\" env var set to IP", &libapi.Node{}, []EnvItem{{"IP", "192.168.1.10/24"}}, true),
+		Entry("Test with no \"IP\" env var set", &api.Node{}, []EnvItem{{"IP", ""}}, true),
+		Entry("Test with \"IP\" env var set to IP", &api.Node{}, []EnvItem{{"IP", "192.168.1.10/24"}}, true),
 		Entry("Test with \"IP\" env var set to IP and BGP spec populated with same IP", makeNode("192.168.1.10/24", ""), []EnvItem{{"IP", "192.168.1.10/24"}}, false),
 		Entry("Test with \"IP\" env var set to IP and BGP spec populated with different IP", makeNode("192.168.1.10/24", ""), []EnvItem{{"IP", "192.168.1.11/24"}}, true),
-		Entry("Test with no \"IP6\" env var set", &libapi.Node{}, []EnvItem{{"IP6", ""}}, true),
-		Entry("Test with \"IP6\" env var set to IP", &libapi.Node{}, []EnvItem{{"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, true),
+		Entry("Test with no \"IP6\" env var set", &api.Node{}, []EnvItem{{"IP6", ""}}, true),
+		Entry("Test with \"IP6\" env var set to IP", &api.Node{}, []EnvItem{{"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, true),
 		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with same IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, false),
 		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with different IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7349/32"}}, true),
 	)
@@ -958,7 +957,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		errors := []error{}
 		for _, node := range nodes.Items {
 			wg.Add(1)
-			go func(n libapi.Node) {
+			go func(n api.Node) {
 				defer wg.Done()
 				err = ensureDefaultConfig(ctx, cfg, c, &n, OSTypeLinux, kubeadmConfig, rancherState)
 				if err != nil {
