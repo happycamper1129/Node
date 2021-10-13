@@ -23,6 +23,7 @@ import (
 	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -427,7 +428,7 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		Attrs:       attrs,
 		Hostname:    nodename,
 		IPv4Pools:   cidrs,
-		IntendedUse: api.IPPoolAllowedUseTunnel,
+		IntendedUse: v3.IPPoolAllowedUseTunnel,
 	}
 
 	v4Assignments, _, err := c.IPAM().AutoAssign(ctx, args)
